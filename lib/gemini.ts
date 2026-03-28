@@ -22,7 +22,7 @@ export async function analyzeImage(base64Image: string) {
           },
         },
         {
-          text: 'Analyze this image and return a structured JSON representation. Extract objects with bounding boxes (x, y, width, height as percentages 0-100), text blocks with content and styling, overall styles (lighting, tone, theme), and background details. Do not include markdown formatting.',
+          text: 'Analyze this image and return a highly detailed structured JSON representation. Extract objects with bounding boxes (x, y, width, height as percentages 0-100), text blocks with content and styling, overall styles (lighting, tone, theme), and background details. Crucially, extract all visible text, quantities, prices, line items, dates, and any other relevant structured data into the "extracted_data" field. Do not include markdown formatting.',
         },
       ],
     },
@@ -101,6 +101,45 @@ export async function analyzeImage(base64Image: string) {
               tone: { type: Type.STRING },
               theme: { type: Type.STRING }
             }
+          },
+          extracted_data: {
+            type: Type.OBJECT,
+            description: 'Extracted structured data from the image, such as receipt details, quantities, prices, dates, etc.',
+            properties: {
+              title: { type: Type.STRING, description: 'Main title or merchant name' },
+              date: { type: Type.STRING, description: 'Date found on the document' },
+              total_amount: { type: Type.NUMBER, description: 'Total amount or price' },
+              tax_amount: { type: Type.NUMBER, description: 'Tax amount' },
+              currency: { type: Type.STRING, description: 'Currency symbol or code' },
+              items: {
+                type: Type.ARRAY,
+                description: 'List of line items, products, or services',
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    description: { type: Type.STRING, description: 'Item description or name' },
+                    quantity: { type: Type.NUMBER, description: 'Quantity of the item' },
+                    unit_price: { type: Type.NUMBER, description: 'Price per unit' },
+                    total_price: { type: Type.NUMBER, description: 'Total price for this item' }
+                  }
+                }
+              },
+              additional_details: {
+                type: Type.ARRAY,
+                description: 'Any other key-value pairs extracted',
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    key: { type: Type.STRING },
+                    value: { type: Type.STRING }
+                  }
+                }
+              },
+              full_text: {
+                type: Type.STRING,
+                description: 'The complete extracted raw text from the image'
+              }
+            }
           }
         },
         required: ['background', 'objects', 'text_blocks', 'styles']
@@ -172,6 +211,30 @@ export function detectChanges(oldSchema: any, newSchema: any) {
     });
   }
 
+  // Diff Extracted Data
+  if (oldSchema.extracted_data && newSchema.extracted_data) {
+    Object.keys(newSchema.extracted_data).forEach(key => {
+      if (key !== 'items' && key !== 'additional_details') {
+        if (newSchema.extracted_data[key] !== oldSchema.extracted_data[key]) {
+          changes.push({ type: 'extracted_data_update', field: key, old: oldSchema.extracted_data[key], new: newSchema.extracted_data[key] });
+        }
+      }
+    });
+
+    if (oldSchema.extracted_data.items && newSchema.extracted_data.items) {
+      newSchema.extracted_data.items.forEach((newItem: any, index: number) => {
+        const oldItem = oldSchema.extracted_data.items[index];
+        if (oldItem) {
+          Object.keys(newItem).forEach(key => {
+            if (newItem[key] !== oldItem[key]) {
+              changes.push({ type: 'extracted_item_update', index, field: key, old: oldItem[key], new: newItem[key] });
+            }
+          });
+        }
+      });
+    }
+  }
+
   return changes;
 }
 
@@ -189,6 +252,10 @@ export function buildPromptFromChanges(changes: any[]) {
       prompt += `- Change the background ${c.field} from "${c.old}" to "${c.new}".\n`;
     } else if (c.type === 'style_update') {
       prompt += `- Adjust the overall ${c.field} from "${c.old}" to "${c.new}".\n`;
+    } else if (c.type === 'extracted_data_update') {
+      prompt += `- Update the extracted data field "${c.field}" from "${c.old}" to "${c.new}".\n`;
+    } else if (c.type === 'extracted_item_update') {
+      prompt += `- Update the extracted line item ${c.index + 1} field "${c.field}" from "${c.old}" to "${c.new}".\n`;
     }
   });
 

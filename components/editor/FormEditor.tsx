@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { Play, Type, Image as ImageIcon, Palette, Box } from "lucide-react";
+import { Play, Type, Image as ImageIcon, Palette, Box, FileText } from "lucide-react";
 import { editImage } from "@/lib/gemini";
 
 export function FormEditor() {
@@ -75,6 +75,21 @@ export function FormEditor() {
     setLocalSchema(newSchema);
   };
 
+  const handleExtractedDataChange = (field: string, value: string | number) => {
+    const newSchema = { ...localSchema };
+    if (!newSchema.extracted_data) newSchema.extracted_data = {};
+    newSchema.extracted_data[field] = value;
+    setLocalSchema(newSchema);
+  };
+
+  const handleExtractedItemChange = (index: number, field: string, value: string | number) => {
+    const newSchema = { ...localSchema };
+    if (!newSchema.extracted_data) newSchema.extracted_data = { items: [] };
+    if (!newSchema.extracted_data.items) newSchema.extracted_data.items = [];
+    newSchema.extracted_data.items[index][field] = value;
+    setLocalSchema(newSchema);
+  };
+
   if (!localSchema) {
     return (
       <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
@@ -98,6 +113,90 @@ export function FormEditor() {
       <ScrollArea className="flex-1 px-6 py-4">
         <div className="space-y-8 pb-8">
           
+          {/* Extracted Data Section */}
+          {localSchema.extracted_data && (
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2 text-gray-900">
+                <FileText className="h-4 w-4 text-indigo-500" />
+                <h4 className="font-semibold text-sm tracking-tight">Extracted Details</h4>
+              </div>
+              <div className="rounded-xl border bg-white p-4 shadow-sm space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {['title', 'date', 'total_amount', 'tax_amount', 'currency'].map((key) => {
+                    const value = localSchema.extracted_data[key] || '';
+                    return (
+                      <div key={key} className="space-y-1.5">
+                        <Label className="text-xs text-gray-500 capitalize">{key.replace(/_/g, " ")}</Label>
+                        <Input
+                          type={['total_amount', 'tax_amount'].includes(key) ? 'number' : 'text'}
+                          value={value}
+                          onChange={(e) => handleExtractedDataChange(key, ['total_amount', 'tax_amount'].includes(key) ? parseFloat(e.target.value) : e.target.value)}
+                          className="h-8 text-sm bg-gray-50/50"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {localSchema.extracted_data.items && localSchema.extracted_data.items.length > 0 && (
+                  <div className="mt-4">
+                    <Label className="text-xs font-semibold text-gray-700 mb-2 block">Line Items</Label>
+                    <div className="space-y-3">
+                      {localSchema.extracted_data.items.map((item: any, index: number) => (
+                        <div key={index} className="grid grid-cols-12 gap-2 items-center bg-gray-50/50 p-2 rounded-md border">
+                          <div className="col-span-5">
+                            <Input
+                              value={item.description || ''}
+                              onChange={(e) => handleExtractedItemChange(index, 'description', e.target.value)}
+                              className="h-7 text-xs"
+                              placeholder="Description"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              type="number"
+                              value={item.quantity || 0}
+                              onChange={(e) => handleExtractedItemChange(index, 'quantity', parseFloat(e.target.value))}
+                              className="h-7 text-xs"
+                              placeholder="Qty"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              type="number"
+                              value={item.unit_price || 0}
+                              onChange={(e) => handleExtractedItemChange(index, 'unit_price', parseFloat(e.target.value))}
+                              className="h-7 text-xs"
+                              placeholder="Price"
+                            />
+                          </div>
+                          <div className="col-span-3">
+                            <Input
+                              type="number"
+                              value={item.total_price || 0}
+                              onChange={(e) => handleExtractedItemChange(index, 'total_price', parseFloat(e.target.value))}
+                              className="h-7 text-xs"
+                              placeholder="Total"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 space-y-1.5">
+                  <Label className="text-xs text-gray-500">Full Extracted Text</Label>
+                  <textarea
+                    value={localSchema.extracted_data.full_text || ''}
+                    onChange={(e) => handleExtractedDataChange('full_text', e.target.value)}
+                    className="w-full min-h-[100px] text-xs p-2 rounded-md border bg-gray-50/50 font-mono resize-y"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Objects Section */}
           {localSchema.objects && localSchema.objects.length > 0 && (
             <div className="space-y-4">
